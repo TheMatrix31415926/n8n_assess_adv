@@ -1,0 +1,346 @@
+{
+  "name": "assess 2 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1bd0f52d-c213-436b-adfa-988401375611",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08",
+          "mode": "list",
+          "cachedResultName": "WhatsApp Campaign Manager",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "queued_at"
+            },
+            {
+              "lookupColumn": "waba_message_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "e1ea6be7-241c-489e-82b8-52e0e915b21e",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "778c674e-34f6-444d-bfd5-fe78cbd1b857",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "84c493a3-fced-4225-9846-f609be69926e",
+              "leftValue": "={{ $json.phone.toString().length }}",
+              "rightValue": 9,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "bf957b37-761f-4a6f-9d86-6f74147c3794",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst d = item.json;\n\n// Validate required fields\nconst missing = [];\nif (!d.customer_name) missing.push('customer_name');\nif (!d.phone) missing.push('phone');\nif (!d.template_name) missing.push('template_name');\nif (!d.order_id) missing.push('order_id');\n\nif (missing.length > 0) {\n  return [{\n    json: {\n      ...d,\n      error: true,\n      skip: true,\n      reason: 'Missing: ' + missing.join(', ')\n    }\n  }];\n}\n\n// Normalize phone\n// Remove +, spaces, dashes\nlet phone = d.phone.toString()\n  .replace(/[\\+\\s\\-]/g, '')\n  .trim();\n\n// Must start with country code\n// India = 91, must be 12 digits\nif (phone.length < 10) {\n  return [{\n    json: {\n      ...d,\n      error: true,\n      skip: true,\n      reason: 'Invalid phone: ' + phone\n    }\n  }];\n}\n\n// Add 91 if missing country code\nif (phone.length === 10) {\n  phone = '91' + phone;\n}\n\nreturn [{\n  json: {\n    ...d,\n    phone_normalized: phone,\n    skip: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "17ccd05d-bd06-439e-b5ef-1e00d54a4a8d",
+      "name": "Validate+Normalise"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08",
+          "mode": "list",
+          "cachedResultName": "WhatsApp Campaign Manager",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nQOpcnzUp2cGf2wsg4W2_n3HEi7YYLpEJoYZSn6vO08/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_name": "={{ $json.customer_name }}",
+            "phone": "={{ $json.to }}",
+            "order_id": "={{ $json.order_id }}",
+            "template_name": "={{ $json.template_name }}"
+          },
+          "matchingColumns": [
+            "customer_name"
+          ],
+          "schema": [
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "template_name",
+              "displayName": "template_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "waba_message_id",
+              "displayName": "waba_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "queued_at",
+              "displayName": "queued_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delivered_at",
+              "displayName": "delivered_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "read_at",
+              "displayName": "read_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1088,
+        -80
+      ],
+      "id": "9b95d296-4df7-4e3b-be87-9912fc85a8b8",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "template": "={{ $json.template_name }}",
+        "components": {
+          "component": [
+            {
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "text": "={{ $json.customer_name }}"
+                  },
+                  {
+                    "text": "={{ $json.order_id }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        832,
+        -96
+      ],
+      "id": "f7a73603-6878-4103-a43d-aa3364fcc1c9",
+      "name": "Send template",
+      "webhookId": "94216bd1-54dc-48af-81ba-e43a0e334951",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "yj5GgM0pAfXnOMid",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Validate+Normalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate+Normalise": {
+      "main": [
+        [
+          {
+            "node": "Send template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4c208dc0-e936-453f-97b0-85ea296f96a1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "dZR4mIl29XDvMYBD",
+  "tags": []
+}
