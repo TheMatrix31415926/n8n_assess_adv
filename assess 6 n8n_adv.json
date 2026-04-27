@@ -1,0 +1,734 @@
+{
+  "name": "assess 6 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2872c55b-6f06-417c-b2d7-2c4f06736b5c",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q",
+          "mode": "list",
+          "cachedResultName": "Compititors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Competitors list",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "active",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4150ed44-ca9f-4abf-b68c-49dedc4d701d",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        432,
+        -16
+      ],
+      "id": "96a9c290-14db-43d7-b7c0-b65fd7ae293d",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "actorId": {
+          "__rl": true,
+          "value": "bGApZ3CtTxA9fv2rl",
+          "mode": "list",
+          "cachedResultName": "🔥 Instagram Profile Scraper API (coderx/instagram-profile-scraper-api)",
+          "cachedResultUrl": "https://console.apify.com/actors/bGApZ3CtTxA9fv2rl/input"
+        },
+        "customBody": "={\n  \"usernames\": [\"{{ $json.instagram_handle }}\"],\n  \"resultsLimit\": 10\n} "
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        656,
+        192
+      ],
+      "id": "e96315f5-97ba-49d9-8fd9-f0b117a20063",
+      "name": "Instagram Scraping",
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        192
+      ],
+      "id": "7e3ad0cc-fbe9-4eb0-8c44-a636c860531f",
+      "name": "Wait",
+      "webhookId": "6f5b605e-be68-4c12-b4af-ce9bba6181db"
+    },
+    {
+      "parameters": {
+        "resource": "Datasets",
+        "datasetId": "={{ $json.defaultDatasetId }}",
+        "options": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        192
+      ],
+      "id": "a380a36e-09fb-4d3a-82c1-379b4b7f4958",
+      "name": "Get dataset items",
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\n// Handle case where Apify returned error or empty\nif (!data || Object.keys(data).length === 0) {\n  return {\n    json: {\n      error: true,\n      message: 'No Instagram data returned',\n      instagram_handle: $('Loop Over Items').item.json.instagram_handle,\n      scraped_at: new Date().toISOString()\n    }\n  };\n}\n\n// Flatten the Instagram profile data\nreturn {\n  json: {\n    competitor_name: $('Loop Over Items').item.json.competitor_name,\n    instagram_handle: data.username || $('Loop Over Items').item.json.instagram_handle,\n    full_name: data.fullName || '',\n    bio: data.biography || '',\n    followers: data.followersCount || 0,\n    following: data.followsCount || 0,\n    posts_count: data.postsCount || 0,\n    is_verified: data.verified || false,\n    profile_url: `https://instagram.com/${data.username || ''}`,\n    external_url: data.externalUrl || '',\n    scraped_at: new Date().toISOString(),\n    error: false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        224
+      ],
+      "id": "dccef42e-3cc3-4b00-8d45-edafa20b2498",
+      "name": "Flatten Matrics"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\n// Skip if previous step had error\nif (data.error) {\n  return {\n    json: {\n      ...data,\n      engagement_tier: 'unknown',\n      account_type: 'unknown',\n      status: 'failed'\n    }\n  };\n}\n\n// Classify engagement tier\nlet engagementTier = 'nano';\nif (data.followers > 1000000) engagementTier = 'mega';\nelse if (data.followers > 100000) engagementTier = 'macro';\nelse if (data.followers > 10000) engagementTier = 'micro';\nelse if (data.followers > 1000) engagementTier = 'nano';\n\n// Classify account type\nlet accountType = 'personal';\nif (data.is_verified) accountType = 'verified_brand';\nelse if (data.followers > 10000) accountType = 'business';\n\nreturn {\n  json: {\n    competitor_name: data.competitor_name,\n    instagram_handle: data.instagram_handle,\n    full_name: data.full_name,\n    followers: data.followers,\n    following: data.following,\n    posts_count: data.posts_count,\n    bio: data.bio,\n    external_url: data.external_url,\n    is_verified: data.is_verified,\n    engagement_tier: engagementTier,\n    account_type: accountType,\n    scraped_at: data.scraped_at,\n    status: 'success'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        208
+      ],
+      "id": "16d6da0c-218b-4278-8016-a719fea6ee3f",
+      "name": "Extract Bussines Node"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q",
+          "mode": "list",
+          "cachedResultName": "Compititors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2055366739,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit#gid=2055366739"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "competitor_name": "={{ $json.competitor_name }}",
+            "instagram_handle": "={{ $json.instagram_handle }}",
+            "followers": "={{ $json.followers }}",
+            "engagement_tier": "={{ $json.engagement_tier }}",
+            "account_type": "={{ $json.account_type }}",
+            "bio": "={{ $json.bio }}",
+            "is_verified": "={{ $json.is_verified }}",
+            "scraped_at": "={{ $json.scraped_at }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "competitor_name",
+              "displayName": "competitor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "followers",
+              "displayName": "followers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "engagement_tier",
+              "displayName": "engagement_tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "account_type",
+              "displayName": "account_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bio",
+              "displayName": "bio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_verified",
+              "displayName": "is_verified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scraped_at",
+              "displayName": "scraped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1712,
+        224
+      ],
+      "id": "56baa3c7-42b9-48ec-a3ed-9148a7bfa376",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        992,
+        0
+      ],
+      "id": "cc2a11ab-02f9-4cd2-8bd0-a856426340af",
+      "name": "Wait1",
+      "webhookId": "6f5b605e-be68-4c12-b4af-ce9bba6181db"
+    },
+    {
+      "parameters": {
+        "resource": "Datasets",
+        "datasetId": "={{ $json.defaultDatasetId }}",
+        "options": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "60f4f092-33b8-432c-837d-024e8d1ad6a0",
+      "name": "Get dataset items1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst competitorName = $('Loop Over Items').item.json.competitor_name;\nconst websiteUrl = $('Loop Over Items').item.json.website_url;\n\n// Handle empty response\nif (!data || Object.keys(data).length === 0) {\n  return {\n    json: {\n      error: true,\n      competitor_name: competitorName,\n      website_url: websiteUrl,\n      message: 'Website crawl returned no data',\n      scraped_at: new Date().toISOString()\n    }\n  };\n}\n\n// Extract text content\nconst rawText = data.text || data.markdown || '';\n\n// Extract emails using regex\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\nconst emails = [...new Set(rawText.match(emailRegex) || [])];\n\n// Extract prices using regex\nconst priceRegex = /\\$[\\d,]+(?:\\.\\d{2})?/g;\nconst prices = [...new Set(rawText.match(priceRegex) || [])];\n\n// Extract certifications keywords\nconst certKeywords = ['ISO', 'certified', 'certification', 'accredited', 'FDA', 'CE mark', 'approved'];\nconst foundCerts = certKeywords.filter(k => rawText.toLowerCase().includes(k.toLowerCase()));\n\nreturn {\n  json: {\n    competitor_name: competitorName,\n    website_url: websiteUrl,\n    page_title: data.title || '',\n    page_url: data.url || websiteUrl,\n    emails_found: emails.join(', '),\n    prices_found: prices.slice(0, 5).join(', '),\n    certifications: foundCerts.join(', '),\n    content_length: rawText.length,\n    scraped_at: new Date().toISOString(),\n    error: false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "ea7ef711-7813-427f-90ed-4c16730a527a",
+      "name": "Flatten Matrics1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\n// Skip if error\nif (data.error) {\n  return {\n    json: {\n      ...data,\n      has_ecommerce: false,\n      has_contact: false,\n      business_score: 0,\n      status: 'failed'\n    }\n  };\n}\n\n// Detect ecommerce signals\nconst ecommerceKeywords = ['add to cart', 'buy now', 'checkout', 'shop now', 'price'];\nconst hasEcommerce = ecommerceKeywords.some(k => \n  data.page_title.toLowerCase().includes(k)\n);\n\n// Check if contact info found\nconst hasContact = data.emails_found.length > 0;\n\n// Simple business score\nlet score = 0;\nif (hasEcommerce) score += 30;\nif (hasContact) score += 20;\nif (data.certifications.length > 0) score += 25;\nif (data.prices_found.length > 0) score += 25;\n\nreturn {\n  json: {\n    competitor_name: data.competitor_name,\n    website_url: data.website_url,\n    page_title: data.page_title,\n    emails_found: data.emails_found,\n    prices_found: data.prices_found,\n    certifications: data.certifications,\n    has_ecommerce: hasEcommerce,\n    has_contact: hasContact,\n    business_score: score,\n    content_length: data.content_length,\n    scraped_at: data.scraped_at,\n    status: 'success'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        0
+      ],
+      "id": "3d67dd9c-924a-4ac1-8633-c98b7c895b4d",
+      "name": "Extract Bussines Node1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q",
+          "mode": "list",
+          "cachedResultName": "Compititors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1936365411,
+          "mode": "list",
+          "cachedResultName": "Sheet3",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit#gid=1936365411"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "competitor_name ": "={{ $json.competitor_name }}",
+            "website_url": "={{ $json.website_url }}",
+            "page_title": "={{ $json.page_title }}",
+            "emails_found": "={{ $json.emails_found }}",
+            "prices_found": "={{ $json.prices_found }}",
+            "certifications": "={{ $json.certifications }}",
+            "has_ecommerce": "={{ $json.has_ecommerce }}",
+            "business_score": "={{ $json.bussiness_score }}",
+            "scraped_at": "={{ $json.scraped_at }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "competitor_name ",
+              "displayName": "competitor_name ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "website_url",
+              "displayName": "website_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "page_title",
+              "displayName": "page_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "emails_found",
+              "displayName": "emails_found",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prices_found",
+              "displayName": "prices_found",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "certifications",
+              "displayName": "certifications",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_ecommerce",
+              "displayName": "has_ecommerce",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_score",
+              "displayName": "business_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scraped_at",
+              "displayName": "scraped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1824,
+        0
+      ],
+      "id": "b7760110-ba53-4a1f-97f9-f0d7823115e5",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        0
+      ],
+      "id": "8b5ab81e-4674-42af-8b94-e97b8d694a8c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "actorId": {
+          "__rl": true,
+          "value": "aYG0l9s7dbB7j3gbS",
+          "mode": "list",
+          "cachedResultName": "Website Content Crawler (apify/website-content-crawler)",
+          "cachedResultUrl": "https://console.apify.com/actors/aYG0l9s7dbB7j3gbS/input"
+        },
+        "customBody": "={\n  \"startUrls\": [{\"url\": \"{{ $('Loop Over Items').item.json.website_url }}\"}],\n  \"maxCrawlPages\": 5,\n  \"maxCrawlDepth\": 1,\n  \"proxyConfiguration\": {\n    \"useApifyProxy\": true\n  }\n} "
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "a662f612-39af-40f9-b4ad-56191e3e03af",
+      "name": "Website creawler",
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Scraping": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get dataset items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get dataset items": {
+      "main": [
+        [
+          {
+            "node": "Flatten Matrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Matrics": {
+      "main": [
+        [
+          {
+            "node": "Extract Bussines Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Bussines Node": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Get dataset items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get dataset items1": {
+      "main": [
+        [
+          {
+            "node": "Flatten Matrics1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Matrics1": {
+      "main": [
+        [
+          {
+            "node": "Extract Bussines Node1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Bussines Node1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Website creawler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website creawler": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "18cbf1bd-96e8-46e6-b1fa-af7293db732f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "gUFUpd1ZiuVP1H3R",
+  "tags": []
+}
