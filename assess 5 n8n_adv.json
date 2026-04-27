@@ -1,0 +1,197 @@
+{
+  "name": "assess 5 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d0b2230f-3cda-447b-a5ab-cb4df65f0dbc",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q",
+          "mode": "list",
+          "cachedResultName": "fb_ads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pp7qI9i1xhR2zxI7W_qUQGpr7Udqhu0Y233Gf_MZ_8Q/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "active",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3f194fa2-3ca1-43b9-8dc9-cf882be7e67d",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads directly from previous node (no node name needed)\nconst competitorName = $json.competitor_name;\nconst pageId = $json.facebook_page_id;\nconst niche = $json.niche;\n\n// Mock ad snapshot data\nconst mockAds = [\n  {\n    ad_id: `AD-${Math.floor(Math.random() * 9000) + 1000}`,\n    headline: `Best ${niche} products - Limited offer!`,\n    cta: 'Shop Now',\n    format: 'Image',\n    estimated_reach: Math.floor(Math.random() * 50000) + 10000,\n    run_days: Math.floor(Math.random() * 30) + 1,\n    spend_estimate: `$${Math.floor(Math.random() * 5000) + 500}`\n  },\n  {\n    ad_id: `AD-${Math.floor(Math.random() * 9000) + 1000}`,\n    headline: `${competitorName} - New Collection 2026`,\n    cta: 'Learn More',\n    format: 'Video',\n    estimated_reach: Math.floor(Math.random() * 80000) + 20000,\n    run_days: Math.floor(Math.random() * 20) + 5,\n    spend_estimate: `$${Math.floor(Math.random() * 8000) + 1000}`\n  },\n  {\n    ad_id: `AD-${Math.floor(Math.random() * 9000) + 1000}`,\n    headline: `Why ${competitorName} leads the market`,\n    cta: 'Sign Up',\n    format: 'Carousel',\n    estimated_reach: Math.floor(Math.random() * 30000) + 5000,\n    run_days: Math.floor(Math.random() * 15) + 2,\n    spend_estimate: `$${Math.floor(Math.random() * 3000) + 200}`\n  }\n];\n\n// Pattern analysis\nconst formats = mockAds.map(a => a.format);\nconst topFormat = formats.sort((a, b) =>\n  formats.filter(v => v === b).length - formats.filter(v => v === a).length\n)[0];\n\nconst avgReach = Math.floor(\n  mockAds.reduce((sum, a) => sum + a.estimated_reach, 0) / mockAds.length\n);\n\nconst topAd = mockAds.reduce((prev, current) =>\n  prev.estimated_reach > current.estimated_reach ? prev : current\n);\n\nreturn {\n  json: {\n    competitor_name: competitorName,\n    page_id: pageId,\n    niche: niche,\n    total_ads: mockAds.length,\n    top_format: topFormat,\n    avg_reach: avgReach,\n    top_ad_headline: topAd.headline,\n    top_ad_reach: topAd.estimated_reach,\n    top_ad_spend: topAd.spend_estimate,\n    ads_data: mockAds,\n    run_date: new Date().toISOString().split('T')[0],\n    status: 'success'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "cbd8ec83-f44c-43f6-a1e3-1ae65f53e148",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "html": "<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; background: #f5f5f5; }\n    .header { background: #1877F2; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }\n    .header h1 { margin: 0; font-size: 24px; }\n    .header p { margin: 5px 0 0; opacity: 0.8; }\n    .section { background: white; padding: 20px; margin: 2px 0; }\n    .competitor-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin: 10px 0; }\n    .competitor-name { font-size: 18px; font-weight: bold; color: #1877F2; }\n    .metric { display: inline-block; background: #f0f4ff; padding: 8px 15px; border-radius: 20px; margin: 5px; font-size: 13px; }\n    .metric strong { color: #1877F2; }\n    .top-ad { background: #fff8e1; border-left: 4px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 0 8px 8px 0; }\n    .top-ad-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 5px; }\n    .footer { background: #333; color: #aaa; padding: 15px; text-align: center; font-size: 12px; border-radius: 0 0 8px 8px; }\n    .badge { background: #e8f5e9; color: #2e7d32; padding: 3px 10px; border-radius: 10px; font-size: 12px; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>📊 Facebook Ads Spy Digest</h1>\n    <p>Daily Report — {{ $json.run_date }}</p>\n  </div>\n\n  <div class=\"section\">\n    <div class=\"competitor-card\">\n      <div class=\"competitor-name\">\n        {{ $json.competitor_name }} \n        <span class=\"badge\">{{ $json.niche }}</span>\n      </div>\n      \n      <div style=\"margin: 10px 0;\">\n        <span class=\"metric\">🎯 Ads Running: <strong>{{ $json.total_ads }}</strong></span>\n        <span class=\"metric\">📺 Top Format: <strong>{{ $json.top_format }}</strong></span>\n        <span class=\"metric\">👥 Avg Reach: <strong>{{ $json.avg_reach.toLocaleString() }}</strong></span>\n      </div>\n\n      <div class=\"top-ad\">\n        <div class=\"top-ad-label\">⭐ Top Performing Ad</div>\n        <div><strong>{{ $json.top_ad_headline }}</strong></div>\n        <div style=\"margin-top: 8px; font-size: 13px; color: #555;\">\n          Reach: {{ $json.top_ad_reach.toLocaleString() }} &nbsp;|&nbsp; \n          Est. Spend: {{ $json.top_ad_spend }}\n        </div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"footer\">\n    Generated by n8n Automation | SRP1004 Facebook Ads Spy | {{ $json.run_date }}\n  </div>\n</body>\n</html>"
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "5db3968a-ff60-476b-854d-ce143f293d41",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "sendTo": "dewanshu9004@gmail.com",
+        "subject": "=📊 Facebook Ads Digest - {{ $('Code in JavaScript').item.json.run_date }} - {{ $('Code in JavaScript').item.json.competitor_name }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "b7079f75-b8a4-440a-bb84-87a8f0a0ffeb",
+      "name": "Send a message",
+      "webhookId": "1a2dd7b5-872e-4020-af48-3c976f6df255",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "KCDKXdYXOHRPfdIs",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fb_ads_digest_log \n    (run_date, competitor_name, ads_found, digest_sent, status)\nVALUES \n    (\n        CURRENT_DATE,\n        '{{ $('Code in JavaScript').item.json.competitor_name }}',\n        {{ $('Code in JavaScript').item.json.total_ads }},\n        true,\n        'completed'\n    )\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "b6217558-9009-439e-8639-a608252d6c43",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "36cc2ed5-252d-4901-8b3b-130582f5856b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "f7uSYjaSY81HH26V",
+  "tags": []
+}
