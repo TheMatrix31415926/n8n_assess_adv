@@ -1,0 +1,575 @@
+{
+  "name": "assess 4 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "29011033-f498-4973-a776-ffc2a24a29cf",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "influencers_raw",
+          "mode": "list",
+          "cachedResultName": "influencers_raw"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "status",
+              "value": "S1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f56c04a5-9232-4b52-8534-a94e61cd1344",
+      "name": "Select rows from a table",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  let normalizedUrl = null;\n\n  if (data.profile_url) {\n    // Step 1: lowercase and trim\n    let url = data.profile_url.toLowerCase().trim();\n\n    // Step 2: remove http/https and www\n    url = url.replace(/^https?:\\/\\/(www\\.)?/, '');\n\n    // Step 3: remove trailing slash\n    url = url.replace(/\\/$/, '');\n\n    // Step 4: extract instagram.com/username\n    const match = url.match(/instagram\\.com\\/([a-z0-9._]+)/);\n\n    if (match) {\n      normalizedUrl = `instagram.com/${match[1]}`;\n    }\n  }\n\n  results.push({\n    json: {\n      ...data,\n      normalized_instagram_url: normalizedUrl\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "de4a26a7-30a8-40e8-b39a-c2275b07ba39",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "influencers_raw",
+          "mode": "list",
+          "cachedResultName": "influencers_raw"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "is_primary": false,
+            "followers": 0,
+            "normalized_instagram_url": "={{ $json.normalized_instagram_url }}",
+            "updated_at": "={{ new Date().toISOString() }}",
+            "record_id": "={{ $json.record_id }}"
+          },
+          "matchingColumns": [
+            "record_id"
+          ],
+          "schema": [
+            {
+              "id": "record_id",
+              "displayName": "record_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "profile_url",
+              "displayName": "profile_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "normalized_instagram_url",
+              "displayName": "normalized_instagram_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "full_name",
+              "displayName": "full_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "followers",
+              "displayName": "followers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_primary",
+              "displayName": "is_primary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "merged_into",
+              "displayName": "merged_into",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "id": "7a937af6-397c-45c2-b06b-042a2716bf37",
+      "name": "Update Rows (Save Normalized URLs)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT record_id, profile_url, normalized_instagram_url, full_name, email, phone, followers, status\nFROM influencers_raw\nWHERE normalized_instagram_url IS NOT NULL\nAND status = 'S1';\n\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        800,
+        0
+      ],
+      "id": "4513ec1d-ca6e-4638-afa4-7ba5570748a0",
+      "name": "Check Normalized URL Not Null, Detect Duplicates",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c3dec0ce-8b27-4117-9517-ff37b31c1418",
+              "leftValue": "={{ $json.duplicate_count }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1088,
+        64
+      ],
+      "id": "3cb81dd2-28e7-471c-9360-47ae24a8bf58",
+      "name": "greater"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1d82bfa2-8d55-4893-bf53-3c1ccf561e98",
+              "leftValue": "={{ $json.duplicate_count }}",
+              "rightValue": "1",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1072,
+        -112
+      ],
+      "id": "e785581f-c584-459e-9218-9f315bd92d91",
+      "name": "equal"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE influencers_raw\nSET status = 'CRM_Pending',\n    updated_at = NOW()\nWHERE record_id IN ('ROW-04', 'ROW-05');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        -112
+      ],
+      "id": "b86fe39f-b24a-4a94-9682-5b0990fece45",
+      "name": "CRM pending",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    record_id,\n    profile_url,\n    normalized_instagram_url,\n    full_name,\n    email,\n    phone,\n    followers,\n    status,\n    created_at\nFROM influencers_raw\nWHERE normalized_instagram_url = 'https://www.instagram.com/your_target_handle/'\n  AND status = 'S1'\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1296,
+        64
+      ],
+      "id": "1f67d573-c14c-408b-999a-bce8ddc42ce4",
+      "name": "Fetch Full Duplicate Groups",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst groups = {};\n\n// Group all records by normalized URL\nfor (const item of items) {\n  const url = item.json.normalized_instagram_url;\n  if (!groups[url]) groups[url] = [];\n  groups[url].push(item.json);\n}\n\nconst primaryRecords = [];\nconst duplicateMarkers = [];\n\nfor (const [url, records] of Object.entries(groups)) {\n  // Sort oldest first - oldest becomes primary\n  records.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));\n\n  const primary = records[0];\n  const duplicates = records.slice(1);\n\n  // Merge: pick first non-null value from all records\n  const merged = {\n    record_id: primary.record_id,\n    normalized_instagram_url: url,\n    profile_url: primary.profile_url,\n    full_name: null,\n    email: null,\n    phone: null,\n    followers: null\n  };\n\n  for (const r of records) {\n    if (!merged.full_name && r.full_name) merged.full_name = r.full_name;\n    if (!merged.email && r.email) merged.email = r.email;\n    if (!merged.phone && r.phone) merged.phone = r.phone;\n    if (!merged.followers && r.followers) merged.followers = r.followers;\n  }\n\n  primaryRecords.push({\n    json: { ...merged, status: 'CRM_Pending', is_primary: true }\n  });\n\n  for (const dup of duplicates) {\n    duplicateMarkers.push({\n      json: {\n        record_id: dup.record_id,\n        merged_into: primary.record_id,\n        status: 'merged'\n      }\n    });\n  }\n}\n\n// Store in workflow static data for use in next nodes\n$workflow.staticData.primaryRecords = primaryRecords;\n$workflow.staticData.duplicateMarkers = duplicateMarkers;\n\n// Return primary records first\nreturn primaryRecords.length > 0 ? primaryRecords : [{ json: { no_merges: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        64
+      ],
+      "id": "0fa05b8a-930b-44b6-9d9d-ef2e426e496a",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE influencers_raw\nSET full_name = 'John Doe',\n    email = 'john@example.com',\n    phone = '1234567890',\n    followers = 500,\n    status = 'S1',\n    is_primary = true,\n    updated_at = NOW()\nWHERE record_id = 'ROW-04';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        -112
+      ],
+      "id": "79e89b75-30d2-40d3-86e0-68c0843eff7b",
+      "name": "Update Primary Merged Record",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE influencers_raw\nSET status = $1,\n    merged_into = $2,\n    updated_at = NOW()\nWHERE record_id = $3",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1696,
+        64
+      ],
+      "id": "bbc82bd7-16b9-4d32-8220-018c4f6be64a",
+      "name": "mark duplicate as merged",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    normalized_instagram_url,\n    COUNT(*)::INTEGER as duplicate_count,\n    ARRAY_AGG(record_id) as record_ids\nFROM influencers_raw\nWHERE normalized_instagram_url IS NOT NULL\n  AND status = 'S1'\nGROUP BY normalized_instagram_url",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        944,
+        -16
+      ],
+      "id": "1813c06d-f92e-4fb9-ada0-3b3622f9f9d7",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Update Rows (Save Normalized URLs)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Rows (Save Normalized URLs)": {
+      "main": [
+        [
+          {
+            "node": "Check Normalized URL Not Null, Detect Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Normalized URL Not Null, Detect Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "equal": {
+      "main": [
+        [
+          {
+            "node": "CRM pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "greater": {
+      "main": [
+        [
+          {
+            "node": "Fetch Full Duplicate Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Full Duplicate Groups": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM pending": {
+      "main": [
+        [
+          {
+            "node": "Update Primary Merged Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "mark duplicate as merged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "equal",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "greater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ed154de5-6e99-4b59-b676-630a6d0d6c71",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "9i9KLZM6gZEqQGto",
+  "tags": []
+}
