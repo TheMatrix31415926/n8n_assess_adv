@@ -1,0 +1,268 @@
+{
+  "name": "assess 3 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d176350b-8fec-471f-82f7-73a8a9bf19ca",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    record_id,\n    linkedin_url,\n    normalized_linkedin_url,\n    first_name,\n    last_name,\n    email,\n    phone,\n    status\nFROM learners\nWHERE status = 'new' \n  AND linkedin_url IS NOT NULL",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "04685cbd-8cf3-4ad8-ac41-3bd9dd02c978",
+      "name": "Postgres - Fetch Records",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code cleans up LinkedIn URLs to find duplicates\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  let normalizedUrl = null;\n  \n  if (data.linkedin_url) {\n    // Convert to lowercase\n    let url = data.linkedin_url.toLowerCase().trim();\n    \n    // Remove http/https and www\n    url = url.replace(/^https?:\\/\\/(www\\.)?/, '');\n    \n    // Remove trailing slashes\n    url = url.replace(/\\/$/, '');\n    \n    // Extract just the profile path (linkedin.com/in/username)\n    const match = url.match(/linkedin\\.com\\/in\\/([a-z0-9-]+)/);\n    \n    if (match) {\n      normalizedUrl = `linkedin.com/in/${match[1]}`;\n    }\n  }\n  \n  results.push({\n    json: {\n      ...data,\n      normalized_linkedin_url: normalizedUrl\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "28f5e2de-4514-42ca-bc8a-dcf4d7a7716f",
+      "name": "Code - Normalize LinkedIn URLs"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE learners \nSET normalized_linkedin_url = $1,\n    updated_at = NOW()\nWHERE record_id = $2",
+        "options": {
+          "queryReplacement": "={{ $json.normalized_linkedin_url }},{{ $json.record_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "id": "7a3c1bad-3a6e-4daa-a587-7abf8175a2f5",
+      "name": "Postgres - Update Normalized URLs",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    normalized_linkedin_url,\n    COUNT(*)::INTEGER as duplicate_count,\n    ARRAY_AGG(record_id) as record_ids\nFROM learners\nWHERE normalized_linkedin_url IS NOT NULL\n  AND status = 'new'\nGROUP BY normalized_linkedin_url",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        0
+      ],
+      "id": "f0a2bee6-7dec-419c-b822-8f70858253e1",
+      "name": "Postgres - Detect Duplicates",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst unique = [];\nconst duplicates = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  if (data.duplicate_count === 1) {\n    // Only one record with this URL - it's unique\n    unique.push({\n      json: {\n        normalized_linkedin_url: data.normalized_linkedin_url,\n        record_id: data.record_ids[0]\n      }\n    });\n  } else if (data.duplicate_count > 1) {\n    // Multiple records - these are duplicates\n    duplicates.push({\n      json: {\n        normalized_linkedin_url: data.normalized_linkedin_url,\n        record_ids: data.record_ids,\n        duplicate_count: data.duplicate_count\n      }\n    });\n  }\n}\n\n// Return as array of arrays for multiple outputs\nreturn { 0: unique, 1: duplicates };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        -16
+      ],
+      "id": "1ffa4e4b-ab51-4b44-b1a0-feea291e23e5",
+      "name": "Code - Split Unique vs Duplicates"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE learners \nSET status = 'crm_ready',\n    updated_at = NOW()\nWHERE record_id = $1",
+        "options": {
+          "queryReplacement": "={{ $json.record_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1456,
+        -112
+      ],
+      "id": "96a43732-56fd-4da4-8f90-c02e2bc66440",
+      "name": "Postgres - Mark Unique as CRM Ready (from Output 0)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    record_id,\n    linkedin_url,\n    normalized_linkedin_url,\n    first_name,\n    last_name,\n    email,\n    phone,\n    status,\n    created_at\nFROM learners\nWHERE normalized_linkedin_url = $1\n  AND status = 'new'\nORDER BY created_at ASC",
+        "options": {
+          "queryReplacement": "={{ $json[\"0\"][1].json.normalized_linkedin_url }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1472,
+        112
+      ],
+      "id": "c84a810e-ecb9-421c-98a4-9c1e5f6deaeb",
+      "name": "Fetch Full Duplicate Groups (from Output 1)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst mergedRecords = [];\nconst recordsToMerge = [];\n\n// Group items by normalized_linkedin_url\nconst groups = {};\nfor (const item of items) {\n  const url = item.json.normalized_linkedin_url;\n  if (!groups[url]) {\n    groups[url] = [];\n  }\n  groups[url].push(item.json);\n}\n\n// Process each duplicate group\nfor (const [url, records] of Object.entries(groups)) {\n  if (records.length === 1) continue; // Skip if somehow only one record\n  \n  // Sort by created_at to pick oldest as primary\n  records.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));\n  \n  const primaryRecord = records[0];\n  const duplicateRecords = records.slice(1);\n  \n  // Merge: take first non-null value for each field\n  const merged = {\n    record_id: primaryRecord.record_id,\n    normalized_linkedin_url: url,\n    first_name: null,\n    last_name: null,\n    email: null,\n    phone: null,\n    linkedin_url: primaryRecord.linkedin_url\n  };\n  \n  // Collect best values from all records\n  for (const record of records) {\n    if (!merged.first_name && record.first_name) merged.first_name = record.first_name;\n    if (!merged.last_name && record.last_name) merged.last_name = record.last_name;\n    if (!merged.email && record.email) merged.email = record.email;\n    if (!merged.phone && record.phone) merged.phone = record.phone;\n  }\n  \n  mergedRecords.push({\n    json: {\n      ...merged,\n      status: 'crm_ready',\n      is_primary: true\n    }\n  });\n  \n  // Mark duplicates for update\n  for (const dup of duplicateRecords) {\n    recordsToMerge.push({\n      json: {\n        record_id: dup.record_id,\n        merged_into: primaryRecord.record_id,\n        status: 'merged'\n      }\n    });\n  }\n}\n\n// Return both arrays: merged primary records and duplicate markers\n\nreturn {0:mergedRecords,1: recordsToMerge};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        112
+      ],
+      "id": "708ac81b-d1cc-41c9-99cc-783303b66e06",
+      "name": "Merge Duplicate Records"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Fetch Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Fetch Records": {
+      "main": [
+        [
+          {
+            "node": "Code - Normalize LinkedIn URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Normalize LinkedIn URLs": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Update Normalized URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Update Normalized URLs": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Detect Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Detect Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Code - Split Unique vs Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Split Unique vs Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Mark Unique as CRM Ready (from Output 0)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Full Duplicate Groups (from Output 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Full Duplicate Groups (from Output 1)": {
+      "main": [
+        [
+          {
+            "node": "Merge Duplicate Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Duplicate Records": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a67cec56-0026-4af9-a3f6-3467dad8eb29",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "3snrFJh18nrWHr6L",
+  "tags": []
+}
