@@ -1,0 +1,542 @@
+{
+  "name": "assess 1 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fcbc5ee5-1e46-4091-9262-a0d33278e080",
+              "leftValue": "={{ $json.outcome }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        96,
+        256
+      ],
+      "id": "4540d7ce-32bd-4371-8e09-3859f21e6cc7",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst d = item.json;\n\n// Format data for AR Portal sync\nreturn [{\n  json: {\n    portal_action: 'sync_call_result',\n    call_id: d.call_id,\n    customer_id: d.customer_id,\n    outcome: d.outcome,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        176
+      ],
+      "id": "75ef1aaf-41f4-4aca-9004-9a831acf0a5d",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        800,
+        80
+      ],
+      "id": "e1de733e-a525-431a-8d46-0256a79d5d12",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "retell-post-call",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        80
+      ],
+      "id": "5ff60a2c-f133-4ab1-ba55-858e0cb014aa",
+      "name": "Webhook - Retell Post Call",
+      "webhookId": "17b2da15-d91a-4f7c-aef8-ab670232d592"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    p.*,\n    s.session_cookie,\n    s.is_valid as cookie_valid\nFROM post_call_records p\nLEFT JOIN erp_session s \n    ON s.cookie_key = 'acumatica_session'\nWHERE p.call_id = '{{ $json.body.call_id }}'\nAND p.processed = FALSE;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        352,
+        -16
+      ],
+      "id": "ac3c6426-4dd9-44ee-a241-74e2287d6ec8",
+      "name": "Get row(s)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst d = item.json;\n\n// Webhook data\nconst webhookData = $('Webhook - Retell Post Call')\n  .first().json;\n\n// Disposition mapping table\n// Natural language → ERP code\nconst dispositionMap = {\n  // Positive outcomes\n  'interested':           'DISP-001-HOT',\n  'very_interested':      'DISP-001-HOT',\n  'ready_to_buy':         'DISP-001-HOT',\n  'demo_requested':       'DISP-002-WARM',\n  'callback_requested':   'DISP-002-WARM',\n  'follow_up_needed':     'DISP-002-WARM',\n  'pricing_requested':    'DISP-002-WARM',\n  // Neutral outcomes\n  'voicemail':            'DISP-003-COLD',\n  'no_answer':            'DISP-003-COLD',\n  'left_message':         'DISP-003-COLD',\n  'busy':                 'DISP-003-COLD',\n  // Negative outcomes\n  'not_interested':       'DISP-004-DEAD',\n  'do_not_call':          'DISP-005-DNC',\n  'wrong_number':         'DISP-006-INVALID',\n  'disconnected':         'DISP-006-INVALID'\n};\n\n// Normalize outcome to lowercase\nconst outcome = (\n  webhookData.outcome || \n  d.outcome || ''\n).toLowerCase().trim()\n  .replace(/\\s+/g, '_');\n\n// Map to ERP disposition code\nconst dispositionCode = \n  dispositionMap[outcome] || 'DISP-099-UNKNOWN';\n\n// Normalize agent notes\nconst agentNotes = (\n  webhookData.agent_notes || \n  d.agent_notes || ''\n).trim().substring(0, 500);\n\nreturn [{\n  json: {\n    call_id: webhookData.call_id || d.call_id,\n    customer_id: webhookData.customer_id || \n                 d.customer_id,\n    outcome: outcome,\n    disposition_code: dispositionCode,\n    agent_notes: agentNotes,\n    session_cookie: d.session_cookie || '',\n    cookie_valid: d.cookie_valid || false,\n    // ERP payload formatted for Acumatica\n    erp_payload: {\n      CustomerID: { \n        value: webhookData.customer_id || \n               d.customer_id \n      },\n      CallID: { value: webhookData.call_id },\n      Disposition: { value: dispositionCode },\n      Notes: { value: agentNotes },\n      Status: { value: 'Processed' }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        -16
+      ],
+      "id": "420b47f7-69c6-4320-8014-c2f7ec88186d",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Find the item with disposition_code\n// (from Code JS5 stream)\nconst callData = items.find(\n  item => item.json.disposition_code\n) || items[0];\n\nconst d = callData.json;\n\n// Validate all required ERP fields\nconst missing = [];\nif (!d.call_id) missing.push('call_id');\nif (!d.customer_id) missing.push('customer_id');\nif (!d.disposition_code) \n  missing.push('disposition_code');\n\nif (missing.length > 0) {\n  throw new Error(\n    'Missing required fields: ' + missing.join(', ')\n  );\n}\n\n// Get session cookie\nconst cookie = d.session_cookie || \n  'ASP.NET_SessionId=demo-cookie-001';\n\nreturn [{\n  json: {\n    ...d,\n    session_cookie: cookie,\n    cookie_header: `Cookie: ${cookie}`,\n    cleaned_at: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        80
+      ],
+      "id": "7d18b26d-4267-46a6-bc63-7567da5b8d7a",
+      "name": "Code - Clean Call Data"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.session_cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"CustomerID\": \"{{ $json.customer_id }}\",\n  \"CallID\": \"{{ $json.call_id }}\",\n  \"Disposition\": \"{{ $json.disposition_code }}\",\n  \"Notes\": \"{{ $json.agent_notes }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1248,
+        80
+      ],
+      "id": "826447f7-c0bb-42e1-b597-0ebb15615c3d",
+      "name": "Acu - Invoice (Hard Cookie)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "54ebacc2-0916-4557-bc26-f95990f68c1f",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": "401",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1472,
+        80
+      ],
+      "id": "7ef9ac5a-9ea7-4a6b-afe4-e26a2cbc6abb",
+      "name": "Check Auth"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO call_sync_log\n(call_id, customer_id, disposition_code,\n action, result, message)\nVALUES (\n  '{{ $json.CallID }}',\n  '{{ $json.CustomerID }}',\n  '{{ $json.Disposition }}',\n  'erp_sync',\n  'success',\n  'Synced with hard cookie'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1696,
+        176
+      ],
+      "id": "2f7dd6a9-7730-4f0b-876d-a0c69bd2da89",
+      "name": "Insert row",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://jsonplaceholder.typicode.com/posts/1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"CallID\": \"{{ $('Check Auth').item.json.CallID }}\",\n  \"Status\": \"Processed\",\n  \"DispositionCode\": \"{{ $('Check Auth').item.json.Disposition }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1920,
+        176
+      ],
+      "id": "5046697d-e73d-4b4a-aa68-37854ade26ef",
+      "name": "Acu - Invoice (Hard Cookie)1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"name\": \"admin\",\n  \"password\": \"admin123\",\n  \"company\": \"AcumaticaDemo\",\n  \"action\": \"login\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1696,
+        -16
+      ],
+      "id": "1db4d51f-5c69-475d-9f75-7a3119e2d9f3",
+      "name": "Acu - Login (If Hard Cookie Fails)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const loginResponse = $input.first().json;\nconst originalData = $('Code - Clean Call Data')\n  .first().json;\n\n// Parse fresh cookie from login response\n// In real Acumatica this comes from Set-Cookie header\nconst freshCookie = loginResponse.headers\n  ? loginResponse.headers['set-cookie'] || \n    'ASP.NET_SessionId=fresh-cookie-' + Date.now()\n  : 'ASP.NET_SessionId=fresh-cookie-' + Date.now();\n\nreturn [{\n  json: {\n    ...originalData,\n    session_cookie: freshCookie,\n    cookie_refreshed: true,\n    refresh_timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -16
+      ],
+      "id": "ac52302d-59d7-4fc7-9f44-3cac2c79a060",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE erp_session\nSET session_cookie = '{{ $json.session_cookie }}',\n    expires_at = NOW() + INTERVAL '24 hours',\n    is_valid = TRUE,\n    updated_at = NOW()\nWHERE cookie_key = 'acumatica_session';\n\n\n\nINSERT INTO call_sync_log\n(call_id, customer_id, disposition_code,\n action, result, message)\nVALUES (\n  '{{ $json.call_id }}',\n  '{{ $json.customer_id }}',\n  '{{ $json.disposition_code }}',\n  'cookie_refresh',\n  'refreshed',\n  'Cookie expired — logged in again'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2144,
+        -16
+      ],
+      "id": "213dbcd2-6f15-4e08-a45f-f9d634837bb9",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://jsonplaceholder.typicode.com/posts/1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.session_cookie }} "
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"CallID\": \"{{ $json.call_id }}\",\n  \"Status\": \"Processed\",\n  \"DispositionCode\": \"{{ $json.disposition_code }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2368,
+        -16
+      ],
+      "id": "43d41fff-2c57-4abf-b799-65909bc42586",
+      "name": "Acu - Invoice (Hard Cookie)2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE post_call_records\nSET disposition_code = '{{ $json.disposition_code }}',\n    erp_status = 'synced',\n    processed = TRUE,\n    acumatica_ref = 'ACU-{{ $now.toMillis() }}'\nWHERE call_id = '{{ $json.call_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2592,
+        -16
+      ],
+      "id": "e2fdc0fc-4e19-4e49-aa8b-bf8627ccdc00",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"portal_action\": \"{{ $json.portal_action }}\",\n  \"call_id\": \"{{ $json.call_id }}\",\n  \"customer_id\": \"{{ $json.customer_id }}\",\n  \"outcome\": \"{{ $json.outcome }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        576,
+        176
+      ],
+      "id": "0259c999-8675-4cbd-b2cc-b6a6b26064f3",
+      "name": "HTTP Request1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code - Clean Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Retell Post Call": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Clean Call Data": {
+      "main": [
+        [
+          {
+            "node": "Acu - Invoice (Hard Cookie)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acu - Invoice (Hard Cookie)": {
+      "main": [
+        [
+          {
+            "node": "Check Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth": {
+      "main": [
+        [
+          {
+            "node": "Acu - Login (If Hard Cookie Fails)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert row": {
+      "main": [
+        [
+          {
+            "node": "Acu - Invoice (Hard Cookie)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acu - Login (If Hard Cookie Fails)": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Acu - Invoice (Hard Cookie)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acu - Invoice (Hard Cookie)2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acu - Invoice (Hard Cookie)1": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8d283c96-94cd-418e-b9c6-81a84f47296f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "IElkHSPsBZ2SIVcf",
+  "tags": []
+}
