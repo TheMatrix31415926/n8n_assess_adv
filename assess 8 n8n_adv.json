@@ -1,0 +1,720 @@
+{
+  "name": "assess 8 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9b1a8497-5a2d-4780-be40-7b7d9899685a",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api13.unipile.com:14358/api/v1/linkedin/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "20"
+            },
+            {
+              "name": "account_id",
+              "value": "Nkci8D2XQk2bBlQYZC33hA"
+            },
+            {
+              "name": "Keyword ",
+              "value": "AI automation"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "OXsCvWZs.KAwXXoVq3cmOfSjAVKGhJM2lqGtbEzQXb5sQwgW1Tm0="
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"api\": \"classic\",\n  \"category\": \"people\",\n  \"keywords\": \"AI automation\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f9feeb9c-cc5a-4536-8747-95cccc363651",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rC14Po3LHo3Qc8xR",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.all();\n\n// 1. Extract the list of people from the API response\n// The API returns an object containing an 'items' array\nlet people = [];\nif (inputData.length > 0 && inputData[0].json && inputData[0].json.items) {\n  people = inputData[0].json.items;\n}\n\n// 2. Define Filter Rules for Profiles\n// Example: Keep only people who have \"Automation\" in their headline\nconst KEYWORD = \"automation\"; \n\nconst filtered = people.filter(person => {\n  const headline = (person.headline || \"\").toLowerCase();\n  \n  // Rule: Check if the person's headline contains the keyword\n  if (!headline.includes(KEYWORD.toLowerCase())) return false;\n  \n  return true;\n});\n\n// 3. Map the results to a clean format\nreturn filtered.map(person => ({\n  json: {\n    name: person.name,\n    headline: person.headline,\n    location: person.location,\n    profile_url: person.profile_url,\n    filter_passed: true\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "d2bd01bc-25e7-4975-818f-11bc66f2a3fe",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const person = $json;\n\n// Extract profile details\nconst name = person.name;\nconst headline = person.headline;\n\nreturn {\n  json: {\n    ...person,\n    prompt: `You are a professional LinkedIn networking assistant.\n    Write a personalized connection request note (max 200 characters).\n\n    Target: ${name}\n    Headline: \"${headline}\"\n\n    Rules:\n    - Mention something specific from their headline to show you read it.\n    - Be professional, concise, and helpful.\n    - Do NOT use emojis.\n    - Do NOT use generic \"I'd like to add you\" phrasing.\n    - Focus on the fact that you share an interest in AI Automation.\n\n    Write ONLY the connection note text, nothing else.`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "f1e89816-620a-4184-9f93-6b97d7de2b6a",
+      "name": "LLM prep"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a professional LinkedIn engagement specialist who writes genuine,  thoughtful comments."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "9f3d14ca-4471-447d-bd47-1e3f78a400ca",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        208
+      ],
+      "id": "00946aa7-c75d-4c9a-ada3-d6580b2fc393",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "X6yz5KIllfL8AWsR",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"comment\": \"string\",\n  \"confidence\": \"number\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1008,
+        208
+      ],
+      "id": "cce29869-a9cd-4fc8-8c19-4e3fd2ea8667",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5d4ab32f-dbf5-4f07-b6af-ac09f5560145",
+              "leftValue": "={{ $json.output?.comment?.length }}",
+              "rightValue": 20,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "9e4a4b5f-8c4b-4d4c-a1e5-4206337b8dcc",
+              "leftValue": "={{ $json.output?.comment }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "a5eb9e56-4abb-49dc-80c7-80c6077930bf",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY",
+          "mode": "list",
+          "cachedResultName": "Reaction ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "comment_posted": "={{ $json.output.comment }}",
+            "reaction_sent": "={{ $json.output.confidence }}",
+            "author": "={{ $('LLM prep').item.json.name }}",
+            "content_preview": "={{ $('LLM prep').item.json.headline }}",
+            "posted_at": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "post_id",
+              "displayName": "post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content_preview",
+              "displayName": "content_preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comment_posted",
+              "displayName": "comment_posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reaction_sent",
+              "displayName": "reaction_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "posted_at",
+              "displayName": "posted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1408,
+        -64
+      ],
+      "id": "26eac50a-ce85-4d9e-b161-766c112db3c6",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1616,
+        -32
+      ],
+      "id": "7852780f-0cb9-4a5f-bd9c-d3098970cd50",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY",
+          "mode": "list",
+          "cachedResultName": "Reaction ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "post_id": "={{ $('HTTP Request').item.json.items[1].id }}",
+            "comment_posted": "={{ $('Code in JavaScript1').item.json.fullData.comment_posted }}",
+            "reaction_sent": "={{ $('Code in JavaScript1').item.json.fullData.reaction_sent }}",
+            "content_preview": "={{ $('Loop Over Items').item.json.content_preview }}",
+            "author": "={{ $('Loop Over Items').item.json.author }}",
+            "posted_at": "={{ $('Code in JavaScript1').item.json.fullData.posted_at }}",
+            "status": "done",
+            "sentiment": "={{ $json.output }}"
+          },
+          "matchingColumns": [
+            "author"
+          ],
+          "schema": [
+            {
+              "id": "post_id",
+              "displayName": "post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "content_preview",
+              "displayName": "content_preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comment_posted",
+              "displayName": "comment_posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reaction_sent",
+              "displayName": "reaction_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "posted_at",
+              "displayName": "posted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2480,
+        112
+      ],
+      "id": "6d745453-a413-4650-a628-7a81829e5f4c",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1118190092",
+        "text": "=🤖 LinkedIn Auto-Engagement Report  ✅ Post by: {{ $json.author }} 💬 Comment: {{ $json.comment_posted }} ❤️ Reaction: Sent 😊 Sentiment: {{ $json.sentiment }} 🕐 Time: {{ new Date().toISOString() }}  Batch complete!",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2768,
+        176
+      ],
+      "id": "4ec970b1-5f39-4da0-98f7-31bcdd52e90e",
+      "name": "Send a text message",
+      "webhookId": "5248df9f-8267-4083-b785-91c81e76ca28",
+      "credentials": {
+        "telegramApi": {
+          "id": "pSRBwiQk71GB1XlP",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access the correct nested path shown in your output logs\nconst rawText = items[0].json.generations?.[0]?.[0]?.text;\n\n// Safety check: if rawText is missing, return the whole object to debug\nif (!rawText) {\n  return { json: { error: \"Could not find text\", fullData: items[0].json } };\n}\n\n// Regex to extract JSON\nconst jsonMatch = rawText.match(/\\{[\\s\\S]*\\}/);\n\nif (jsonMatch) {\n  try {\n    const parsedJson = JSON.parse(jsonMatch[0]);\n    return { json: parsedJson };\n  } catch (e) {\n    return { json: { error: \"Failed to parse JSON\", raw: rawText } };\n  }\n} else {\n  return { json: { error: \"No JSON found in output\", raw: rawText } };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        -16
+      ],
+      "id": "3571ca2c-9168-4448-8ff8-6ad87a8bc02d",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.fullData.comment_posted }}",
+        "options": {
+          "systemMessage": "You are also a data processing API.\n\n\nInput: User text.\nOutput: JSON object only.\n\nSchema:\n{\n  \"sentiment\": \"Positive\" | \"Negative\" | \"Neutral\",\n  \"strength\": float (0.0 to 1.0),\n  \"confidence\": float (0.0 to 1.0)\n}\n\nRules:\n- Do not output introductory text.\n- Do not use markdown backticks.\n- If the text is empty, return null."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2064,
+        0
+      ],
+      "id": "8a325bc2-2fa9-4506-b971-25cf858b74ae",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1840,
+        144
+      ],
+      "id": "39ee76eb-dddb-4746-b617-b043bbae5dca",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "X6yz5KIllfL8AWsR",
+          "name": "OpenAI account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "LLM prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM prep": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6ffcb76e-4b1f-45a0-9525-86ed4f03810b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "LFPobqG2LgO3eQtv",
+  "tags": []
+}
