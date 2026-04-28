@@ -1,0 +1,174 @@
+{
+  "name": "assess 13 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        112
+      ],
+      "id": "35648029-8364-41dd-9168-d623473046e9",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Verification BEFORE update\n-- Shows exactly what WILL be promoted vs blocked\nWITH candidates AS (\n    SELECT\n        r.record_id,\n        r.full_name,\n        r.email,\n        r.normalized_url,\n        r.stage,\n        r.status,\n        -- Check 1: mandatory fields\n        CASE\n            WHEN r.full_name IS NULL THEN 'missing_name'\n            WHEN r.email IS NULL THEN 'missing_email'\n            WHEN r.normalized_url IS NULL \n                THEN 'missing_url'\n            ELSE 'fields_ok'\n        END AS field_check,\n        -- Check 2: S4 sibling exists?\n        EXISTS (\n            SELECT 1 FROM _learnersRaw s\n            WHERE s.normalized_url = r.normalized_url\n            AND s.stage = 'S4'\n            AND s.record_id != r.record_id\n        ) AS has_s4_sibling\n    FROM _learnersRaw r\n    WHERE r.stage IN ('S1', 'S3', 'S5')\n    AND r.stage != 'S7'\n)\nSELECT\n    record_id,\n    full_name,\n    email,\n    normalized_url,\n    stage,\n    field_check,\n    has_s4_sibling,\n    CASE\n        WHEN field_check != 'fields_ok' \n            THEN 'BLOCKED_FIELDS'\n        WHEN has_s4_sibling = TRUE \n            THEN 'BLOCKED_S4'\n        ELSE 'WILL_PROMOTE'\n    END AS promotion_decision\nFROM candidates\nORDER BY stage, promotion_decision;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        -80
+      ],
+      "id": "f271d001-ed13-4d7d-bd85-b74e50cc4ea9",
+      "name": "Before query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- MAIN UPDATE: Promote safe records to S6\n-- Constraints enforced in WHERE clause:\n-- 1. Only S1, S3, S5 (never touch S7)\n-- 2. Must have normalized_url\n-- 3. Must have full_name\n-- 4. Must have email  \n-- 5. Must NOT have S4 sibling\n\nUPDATE _learnersRaw\nSET\n    stage = 'S6',\n    status = 'crm_pending',\n    updated_at = NOW()\nWHERE stage IN ('S1', 'S3', 'S5')\nAND stage != 'S7'\nAND normalized_url IS NOT NULL\nAND full_name IS NOT NULL\nAND email IS NOT NULL\nAND record_id NOT IN (\n    -- Exclude any record with S4 sibling\n    SELECT DISTINCT r.record_id\n    FROM _learnersRaw r\n    INNER JOIN _learnersRaw s\n        ON s.normalized_url = r.normalized_url\n        AND s.stage = 'S4'\n        AND s.record_id != r.record_id\n    WHERE r.stage IN ('S1', 'S3', 'S5')\n)\nRETURNING\n    record_id,\n    full_name,\n    email,\n    normalized_url,\n    stage,\n    status,\n    updated_at;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        256,
+        112
+      ],
+      "id": "c59951d5-49b1-444f-987f-924a9a8c58d7",
+      "name": "Update Query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Count results and write audit log\nWITH summary AS (\n    -- Pass count (just promoted to S6)\n    SELECT COUNT(*) AS pass_count\n    FROM _learnersRaw\n    WHERE stage = 'S6'\n    AND updated_at >= NOW() - INTERVAL '1 minute'\n),\nblocked_s4 AS (\n    SELECT COUNT(*) AS cnt\n    FROM _learnersRaw r\n    WHERE r.stage IN ('S1', 'S3', 'S5')\n    AND EXISTS (\n        SELECT 1 FROM _learnersRaw s\n        WHERE s.normalized_url = r.normalized_url\n        AND s.stage = 'S4'\n        AND s.record_id != r.record_id\n    )\n),\nblocked_fields AS (\n    SELECT COUNT(*) AS cnt\n    FROM _learnersRaw\n    WHERE stage IN ('S1', 'S3', 'S5')\n    AND (full_name IS NULL \n         OR email IS NULL \n         OR normalized_url IS NULL)\n)\nINSERT INTO crm_pending_log\n(run_id, pass_count, block_count,\n blocked_s4_sibling, blocked_missing_fields,\n action, result)\nSELECT\n    'RUN-' || EXTRACT(EPOCH FROM NOW())::BIGINT,\n    s.pass_count,\n    bs4.cnt + bf.cnt,\n    bs4.cnt,\n    bf.cnt,\n    'crm_pending_promotion',\n    'completed'\nFROM summary s, blocked_s4 bs4, \n     blocked_fields bf;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        464,
+        112
+      ],
+      "id": "a94c6f75-ab1c-44b6-80cc-9a401ac94d9e",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Verification AFTER update\n-- Confirms S6 promotions + shows remaining blocked\nSELECT\n    stage,\n    status,\n    COUNT(*) AS record_count,\n    STRING_AGG(record_id, ', ' \n        ORDER BY record_id) AS record_ids\nFROM _learnersRaw\nWHERE stage IN (\n    'S1', 'S3', 'S4', 'S5', 'S6', 'S7',\n    'S4_ABSORBED', 'S1_BLOCKED', 'S3_BLOCKED'\n)\nGROUP BY stage, status\nORDER BY stage;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        272,
+        352
+      ],
+      "id": "8055955c-06b0-4c37-a027-c2453ad3cb9b",
+      "name": "Verification query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Detailed view of what happened\nSELECT\n    record_id,\n    full_name,\n    email,\n    normalized_url,\n    stage,\n    status,\n    updated_at,\n    CASE\n        WHEN stage = 'S6' THEN '✅ Promoted'\n        WHEN stage = 'S7' THEN '🔒 Protected S7'\n        WHEN stage = 'S4' THEN '⏳ In Merge Queue'\n        WHEN stage = 'S4_ABSORBED' \n            THEN '🔄 Absorbed by merge'\n        WHEN full_name IS NULL \n            OR email IS NULL \n            THEN '❌ Blocked: Missing fields'\n        WHEN normalized_url IS NULL \n            THEN '❌ Blocked: No URL'\n        ELSE '⚠️ Still pending'\n    END AS record_state\nFROM _learnersRaw\nORDER BY stage, updated_at DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        352
+      ],
+      "id": "1b40cd38-a9c5-4118-a289-573670de9242",
+      "name": "Detailed after report",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Verification query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Before query": {
+      "main": [
+        []
+      ]
+    },
+    "Update Query": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verification query": {
+      "main": [
+        [
+          {
+            "node": "Detailed after report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "66348a09-eea8-4fe2-8f1a-51bf7162c860",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "0cvUsOq0ZEgH7ZMq",
+  "tags": []
+}
