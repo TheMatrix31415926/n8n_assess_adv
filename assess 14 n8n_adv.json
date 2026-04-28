@@ -1,0 +1,299 @@
+{
+  "name": "assess 14 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ebb64c33-5c04-4647-b616-0c4f8597d623",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Fetch S6 records in batches of 10\nSELECT\n    record_id,\n    full_name,\n    email,\n    phone,\n    company,\n    job_title,\n    normalized_url,\n    stage,\n    status,\n    created_at\nFROM _learnersRaw\nWHERE stage = 'S6'\nAND status = 'crm_pending'\nORDER BY created_at ASC\nLIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        288,
+        -144
+      ],
+      "id": "af5db2c0-63c1-4804-8713-4ff62b7adfd4",
+      "name": "Select rows from a table",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst valid = [];\nconst invalid = [];\n\nfor (const item of items) {\n  const d = item.json;\n\n  // Validate mandatory fields\n  const missing = [];\n  if (!d.full_name) missing.push('full_name');\n  if (!d.email) missing.push('email');\n  if (!d.normalized_url) \n    missing.push('normalized_url');\n\n  if (missing.length > 0) {\n    invalid.push({\n      record_id: d.record_id,\n      reason: 'Missing: ' + missing.join(', ')\n    });\n    continue;\n  }\n\n  // Transform snake_case → CRM request shape\n  const nameParts = (d.full_name || '').split(' ');\n  const firstName = nameParts[0] || '';\n  const lastName = nameParts.slice(1).join(' ') || '';\n\n  // Normalize phone\n  let phone = (d.phone || '').replace(/\\s+/g, '');\n  if (phone && !phone.startsWith('+')) {\n    phone = '+' + phone;\n  }\n\n  valid.push({\n    json: {\n      // Original DB fields\n      record_id: d.record_id,\n      normalized_url: d.normalized_url,\n\n      // CRM shaped payload\n      crm_payload: {\n        firstName: firstName,\n        lastName: lastName,\n        fullName: d.full_name,\n        emailAddress: d.email,\n        phoneNumber: phone,\n        organization: d.company || '',\n        jobTitle: d.job_title || '',\n        linkedInUrl: d.normalized_url,\n        source: 'n8n_pipeline',\n        stage: 'CRM_PENDING'\n      },\n\n      // Keep for logging\n      full_name: d.full_name,\n      email: d.email,\n      phone: phone,\n      company: d.company,\n      job_title: d.job_title,\n      validation: 'passed'\n    }\n  });\n}\n\n// Log invalid records\nif (invalid.length > 0) {\n  console.log('Invalid records skipped:',\n    JSON.stringify(invalid));\n}\n\nif (valid.length === 0) {\n  throw new Error(\n    'No valid S6 records to process. ' +\n    'Invalid: ' + JSON.stringify(invalid)\n  );\n}\n\nreturn valid;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -144
+      ],
+      "id": "d0a5f56c-153c-4faa-9a51-38ad2da7a065",
+      "name": "Validate + Transform"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "480a20ba-a639-4787-b514-9e85587ab62d",
+              "leftValue": "={{ $json.validation }}",
+              "rightValue": "passed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        -144
+      ],
+      "id": "d39b9c6c-5e3c-4423-871d-3a35fd0a59de",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.crm_payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        928,
+        -176
+      ],
+      "id": "4013052e-ad76-48b2-9806-c9844de76dec",
+      "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0410318b-6e52-46ad-a2f0-c932b1542351",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1136,
+        -176
+      ],
+      "id": "1ae4bbaf-fe1f-4b4a-a233-e620b38fd2bc",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO crm_records_final\n(record_id, crm_id, full_name, email,\n phone, company, job_title,\n normalized_url, crm_status,\n api_response, synced_at)\nVALUES (\n  '{{ $json.record_id }}',\n  'CRM-{{ $json.id }}',\n  '{{ $json.crm_payload?.fullName || $json.full_name }}',\n  '{{ $json.crm_payload?.emailAddress || $json.email }}',\n  '{{ $json.crm_payload?.phoneNumber || $json.phone }}',\n  '{{ $json.crm_payload?.organization || $json.company }}',\n  '{{ $json.crm_payload?.jobTitle || $json.job_title }}',\n  '{{ $json.normalized_url }}',\n  'synced',\n  '{{ JSON.stringify($json).substring(0, 500) }}',\n  NOW()\n)\nON CONFLICT (record_id)\nDO UPDATE SET\n  crm_id = EXCLUDED.crm_id,\n  crm_status = 'synced',\n  api_response = EXCLUDED.api_response,\n  synced_at = NOW(),\n  updated_at = NOW();",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1344,
+        -192
+      ],
+      "id": "edb3efb9-b34c-498f-9348-0cb383244e0a",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Only update to S7 AFTER successful CRM response\nUPDATE _learnersRaw\nSET stage = 'S7',\n    status = 'crm_completed',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}'\nAND stage = 'S6';\n\n-- Insert success log\nINSERT INTO crm_completion_log\n(record_id, crm_id, full_name,\n action, result, http_status)\nVALUES (\n  '{{ $json.record_id }}',\n  'CRM-{{ $json.id }}',\n  '{{ $json.full_name }}',\n  'crm_sync',\n  'success',\n  200\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        -192
+      ],
+      "id": "95b3525d-5368-43b2-b426-23d6b3114f03",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO crm_completion_log\n(record_id, full_name,\n action, result, http_status,\n error_message, retry_count)\nVALUES (\n  '{{ $json.record_id }}',\n  '{{ $json.full_name }}',\n  'crm_sync',\n  'failed',\n  {{ $json.statusCode || 500 }},\n  '{{ $json.message || \"API call failed\" }}',\n  0\n);\n\n-- Mark as failed in learners table\nUPDATE _learnersRaw\nSET status = 'crm_failed',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}'\nAND stage = 'S6';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "5d714536-062d-48aa-bb05-01e51cdbbb91",
+      "name": "Log",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "Validate + Transform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + Transform": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6867af28-d85a-47e7-a4ee-79a30f6556ce",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "cubXiYZi1sDIsScb",
+  "tags": []
+}
