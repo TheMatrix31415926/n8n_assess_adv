@@ -1,0 +1,480 @@
+{
+  "name": "assess 11 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b18381fc-9aa7-4109-9353-ba3042099749",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM _learnersRaw\nWHERE stage = 'S2'\nAND status = 'new'\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "b65569f9-6d39-4529-b7f7-4bc4b1c4a6e1",
+      "name": "Select rows from a table",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n  let rawUrl = (d.source_url || '').trim();\n\n  // 🚫 Empty URL\n  if (!rawUrl) {\n    results.push({\n      json: {\n        ...d,\n        normalized_url: null,\n        linkedin_username: null,\n        norm_status: 'skipped_empty',\n        stage: 'S2_FAILED'\n      }\n    });\n    continue;\n  }\n\n  try {\n    // ✅ Step 1: Normalize case\n    let url = rawUrl.toLowerCase().trim();\n\n    // ✅ Step 2: Remove protocol\n    url = url.replace(/^https?:\\/\\//, '');\n\n    // ✅ Step 3: Remove www\n    url = url.replace(/^www\\./, '');\n\n    // ✅ Step 4: Ensure it's LinkedIn profile\n    if (!url.includes('linkedin.com/in/')) {\n      results.push({\n        json: {\n          ...d,\n          normalized_url: null,\n          linkedin_username: null,\n          norm_status: 'invalid_not_linkedin',\n          stage: 'S2_FAILED'\n        }\n      });\n      continue;\n    }\n\n    // ✅ Step 5: Extract username safely\n    const match = url.match(/linkedin\\.com\\/in\\/([^\\/\\?\\#]+)/);\n\n    if (!match || !match[1]) {\n      results.push({\n        json: {\n          ...d,\n          normalized_url: null,\n          linkedin_username: null,\n          norm_status: 'no_username',\n          stage: 'S2_FAILED'\n        }\n      });\n      continue;\n    }\n\n    const username = match[1];\n\n    // ✅ Step 6: Build clean canonical URL\n    const normalizedUrl = `https://www.linkedin.com/in/${username}/`;\n\n    results.push({\n      json: {\n        ...d,\n        normalized_url: normalizedUrl,\n        linkedin_username: username,\n        norm_status: 'normalized',\n        stage: 'S3'\n      }\n    });\n\n  } catch (e) {\n    results.push({\n      json: {\n        ...d,\n        normalized_url: null,\n        linkedin_username: null,\n        norm_status: 'error: ' + e.message,\n        stage: 'S2_FAILED'\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "17636510-bf3a-41a0-8ba7-1ff12a5e90fe",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE _learnersRaw\nSET normalized_url = '{{ $json.normalized_url }}',\n    stage = '{{ $json.stage }}',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}';\n\nINSERT INTO normalisation_log\n(record_id, from_stage, to_stage,\n action, result, message)\nVALUES (\n  '{{ $json.record_id }}',\n  'S2', '{{ $json.stage }}',\n  'url_normalisation',\n  '{{ $json.norm_status }}',\n  'URL: {{ $json.normalized_url }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "id": "62507fe0-056e-4467-93bf-92411e7b027f",
+      "name": "Update Row in table",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT record_id, source_url, \n       normalized_url, stage\nFROM _learnersRaw\nWHERE normalized_url IS NOT NULL\nAND stage = 'S3'\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        0
+      ],
+      "id": "6e7adb78-2efd-4fe3-a25c-1c5121566eae",
+      "name": "Normailzation",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM _learnersRaw\nWHERE stage = 'S3'\nAND normalized_url IS NOT NULL\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "2bcc299f-4821-4fcb-9c3a-d4f78a88d379",
+      "name": "Check if it worked",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n\n  // Generate learner_id if missing\n  let learnerId = d.learner_id;\n\n  if (!learnerId || learnerId === '') {\n    // Promote valid URL record from S2 to S3\n    // Generate ID from username\n    const username = (d.linkedin_username ||\n      d.normalized_url\n        .replace('https://www.linkedin.com/in/', '')\n        .replace('/', '')\n    );\n    learnerId = 'LRN-' + \n      username.toUpperCase()\n        .replace(/[^A-Z0-9]/g, '')\n        .substring(0, 8) +\n      '-' + Date.now().toString().slice(-4);\n  }\n\n  results.push({\n    json: {\n      ...d,\n      learner_id: learnerId,\n      id_repaired: !d.learner_id,\n      stage: 'S3'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "25b6d9bd-7485-4900-aee2-777eb38fb127",
+      "name": "Repair missing learner id"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE _learnersRaw\nSET learner_id = '{{ $json.learner_id }}',\n    stage = 'S3',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "16614c2f-13ad-4a53-93b0-a18483baa4ef",
+      "name": "s2->s3",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Find duplicate normalized URLs\nWITH ranked AS (\n    SELECT\n        id,\n        record_id,\n        normalized_url,\n        full_name,\n        email,\n        created_at,\n        ROW_NUMBER() OVER (\n            PARTITION BY normalized_url\n            ORDER BY created_at ASC\n        ) AS rn,\n        COUNT(*) OVER (\n            PARTITION BY normalized_url\n        ) AS url_count\n    FROM _learnersRaw\n    WHERE stage = 'S3'\n    AND normalized_url IS NOT NULL\n)\nSELECT * FROM ranked\nWHERE url_count > 1\nORDER BY normalized_url, rn;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "23b0cf41-b7d1-48c7-aed7-ed57bcbee400",
+      "name": "s3->s4",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\n// Group by normalized_url\nconst groups = {};\nfor (const item of items) {\n  const url = item.json.normalized_url;\n  if (!groups[url]) groups[url] = [];\n  groups[url].push(item.json);\n}\n\nfor (const [url, records] of Object.entries(groups)) {\n  // Sort by created_at — oldest is primary\n  records.sort((a, b) =>\n    new Date(a.created_at) - new Date(b.created_at)\n  );\n\n  const primary = records[0];\n\n  for (let i = 0; i < records.length; i++) {\n    const rec = records[i];\n    const isPrimary = i === 0;\n\n    results.push({\n      json: {\n        ...rec,\n        is_duplicate: !isPrimary,\n        primary_record_id: primary.record_id,\n        duplicate_group: url,\n        stage: 'S4',\n        updated_at: new Date().toISOString()\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        0
+      ],
+      "id": "cd8291c0-56ad-47d8-b2d1-5a3baf77cc2e",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE _learnersRaw\nSET stage = 'S4',\n    is_duplicate = {{ $json.is_duplicate }},\n    merged_into = '{{ $json.primary_record_id }}',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2016,
+        0
+      ],
+      "id": "d927857d-ee44-44ab-8856-1f6143f3c606",
+      "name": "update to s4",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    p.record_id AS primary_id,\n    p.normalized_url,\n    p.full_name AS primary_name,\n    p.email AS primary_email,\n    p.phone AS primary_phone,\n    p.company AS primary_company,\n    p.job_title AS primary_title,\n    p.learner_id AS primary_learner_id,\n\n    d.record_id AS dup_id,\n    d.full_name AS dup_name,\n    d.email AS dup_email,\n    d.phone AS dup_phone,\n    d.company AS dup_company,\n    d.job_title AS dup_title\n\nFROM _learnersRaw p\nINNER JOIN _learnersRaw d\n    ON p.normalized_url = d.normalized_url\n    AND p.record_id != d.record_id\n    AND d.is_duplicate = TRUE\n\nWHERE p.stage = 'S4'\nAND p.is_duplicate = FALSE\n\nORDER BY p.normalized_url;\n\n\n\n\n\nUPDATE _learnersRaw\nSET stage = 'S5',\n    updated_at = NOW()\nWHERE stage = 'S4';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2176,
+        16
+      ],
+      "id": "6e758424-5b86-428a-bf56-c0412460377e",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM _learnersRaw\nWHERE stage = 'S5'\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2384,
+        16
+      ],
+      "id": "ce543073-f098-46ea-b89a-274b3dfc45fb",
+      "name": "Validate CRM readiness",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n  const issues = [];\n\n  // CRM readiness checks\n  if (!d.full_name) issues.push('missing_name');\n  if (!d.email) issues.push('missing_email');\n  if (!d.normalized_url) issues.push('missing_url');\n  if (!d.learner_id) issues.push('missing_id');\n\n  const isReady = issues.length === 0;\n\n  results.push({\n    json: {\n      ...d,\n      crm_ready: isReady,\n      crm_issues: issues.join(', '),\n      stage: isReady ? 'S6' : 'S5_FAILED',\n      updated_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        16
+      ],
+      "id": "c582b522-f3eb-47f7-ab9a-e79f7b8f84df",
+      "name": "CRM validation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE _learnersRaw\nSET crm_ready = {{ $json.crm_ready }},\n    stage = '{{ $json.stage }}',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}';\n\n\nSELECT * FROM _learnersRaw\nWHERE stage = 'S6'\nAND crm_ready = TRUE\nORDER BY created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2800,
+        16
+      ],
+      "id": "a20c1e41-8094-4f36-8a96-ab129c09fb07",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE _learnersRaw\nSET stage = 'S7',\n    status = 'completed',\n    updated_at = NOW()\nWHERE record_id = '{{ $json.record_id }}'\nAND crm_ready = TRUE;\n\n\nINSERT INTO pipeline_log\n(record_id, from_stage, to_stage,\n action, result, message)\nVALUES (\n  '{{ $json.record_id }}',\n  'S6', 'S7',\n  'pipeline_complete',\n  'success',\n  'Learner: {{ $json.full_name }} | ID: {{ $json.learner_id }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3008,
+        16
+      ],
+      "id": "8c19e42c-f0f8-4ae7-8014-4363286c6195",
+      "name": "s7 final",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Update Row in table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Row in table": {
+      "main": [
+        [
+          {
+            "node": "Normailzation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normailzation": {
+      "main": [
+        [
+          {
+            "node": "Check if it worked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if it worked": {
+      "main": [
+        [
+          {
+            "node": "Repair missing learner id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repair missing learner id": {
+      "main": [
+        [
+          {
+            "node": "s2->s3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "s2->s3": {
+      "main": [
+        [
+          {
+            "node": "s3->s4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "s3->s4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "update to s4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update to s4": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Validate CRM readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate CRM readiness": {
+      "main": [
+        [
+          {
+            "node": "CRM validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM validation": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "s7 final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "baee93bb-37fb-4ec8-9821-7fed14a42c1a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "RuuTcpHfWbfYrORY",
+  "tags": []
+}
