@@ -1,0 +1,172 @@
+{
+  "name": "assess 12 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "18c7c46d-ebb2-4fe7-93ca-aca28ba5b041",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Preview: count S4 records and groups\nSELECT\n    normalized_url,\n    COUNT(*) AS record_count,\n    MIN(created_at) AS oldest_record,\n    ARRAY_AGG(record_id \n        ORDER BY created_at ASC) AS record_ids,\n    ARRAY_AGG(full_name \n        ORDER BY created_at ASC) AS names,\n    SUM(CASE WHEN is_duplicate = FALSE \n        THEN 1 ELSE 0 END) AS primary_count\nFROM _learnersRaw\nWHERE stage = 'S4'\nAND normalized_url IS NOT NULL\nGROUP BY normalized_url\nHAVING COUNT(*) > 1\nORDER BY record_count DESC, normalized_url;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        336,
+        -368
+      ],
+      "id": "251ac366-aa58-4ea0-a62b-38ad343d44af",
+      "name": " Execute a SQL Query (Preview)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ranked AS (\n    SELECT *,\n        FIRST_VALUE(record_id) OVER (\n            PARTITION BY normalized_url\n            ORDER BY created_at ASC\n        ) AS primary_record_id\n    FROM _learnersRaw\n    WHERE stage = 'S4'\n    AND normalized_url IS NOT NULL\n)\n\nSELECT\n    normalized_url,\n    COUNT(*) AS group_size,\n    MIN(created_at) AS primary_created_at,\n    primary_record_id,\n\n    JSON_AGG(\n        JSON_BUILD_OBJECT(\n            'record_id', record_id,\n            'full_name', full_name,\n            'email', email,\n            'phone', phone,\n            'company', company,\n            'job_title', job_title,\n            'normalized_url', normalized_url,\n            'is_duplicate', is_duplicate,\n            'created_at', created_at,\n            'stage', stage\n        )\n        ORDER BY created_at ASC\n    ) AS group_records\n\nFROM ranked\nGROUP BY normalized_url, primary_record_id\nHAVING COUNT(*) > 1\nORDER BY normalized_url;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        -80
+      ],
+      "id": "ac8b76bb-3a6b-4e95-8235-9c405a17a0d9",
+      "name": " Execute a SQL Query1 (Fetch S4 Groups)",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n\n  // Parse group records from JSON\n  let groupRecords = d.group_records;\n  if (typeof groupRecords === 'string') {\n    try {\n      groupRecords = JSON.parse(groupRecords);\n    } catch(e) {\n      continue;\n    }\n  }\n\n  // Skip groups with only 1 record\n  if (!groupRecords || groupRecords.length < 2) {\n    continue;\n  }\n\n  // Sort by created_at ASC — oldest is primary\n  groupRecords.sort((a, b) =>\n    new Date(a.created_at) - new Date(b.created_at)\n  );\n\n  const primary = groupRecords[0];\n  const duplicates = groupRecords.slice(1);\n\n  // ── NULL-SAFE MERGE LOGIC ──\n  // Never overwrite non-empty primary field\n  // with empty duplicate field\n  let mergedName = primary.full_name;\n  let mergedEmail = primary.email;\n  let mergedPhone = primary.phone;\n  let mergedCompany = primary.company;\n  let mergedTitle = primary.job_title;\n  const mergedFields = [];\n  const absorbedIds = [];\n\n  for (const dup of duplicates) {\n    absorbedIds.push(dup.record_id);\n\n    // Only fill if primary field is null/empty\n    if (!mergedEmail && dup.email) {\n      mergedEmail = dup.email;\n      mergedFields.push('email from ' + dup.record_id);\n    }\n    if (!mergedPhone && dup.phone) {\n      mergedPhone = dup.phone;\n      mergedFields.push('phone from ' + dup.record_id);\n    }\n    if (!mergedCompany && dup.company) {\n      mergedCompany = dup.company;\n      mergedFields.push(\n        'company from ' + dup.record_id\n      );\n    }\n    if (!mergedName && dup.full_name) {\n      mergedName = dup.full_name;\n      mergedFields.push(\n        'full_name from ' + dup.record_id\n      );\n    }\n    if (!mergedTitle && dup.job_title) {\n      mergedTitle = dup.job_title;\n      mergedFields.push(\n        'job_title from ' + dup.record_id\n      );\n    }\n  }\n\n  // ── SAFE SQL ESCAPE FUNCTION ──\n  const escSql = (val) => {\n    if (val === null || val === undefined) \n      return 'NULL';\n    return \"'\" + \n      String(val).replace(/'/g, \"''\") + \n      \"'\";\n  };\n\n  // ── GENERATE SQL UPDATE FOR PRIMARY ──\n  const updateSql = `\nUPDATE _learnersRaw SET\n  full_name = ${escSql(mergedName)},\n  email = ${escSql(mergedEmail)},\n  phone = ${escSql(mergedPhone)},\n  company = ${escSql(mergedCompany)},\n  job_title = ${escSql(mergedTitle)},\n  stage = 'S5',\n  status = 'merged',\n  updated_at = NOW()\nWHERE record_id = ${escSql(primary.record_id)};\n  `.trim();\n\n  // ── GENERATE SQL TO ABSORB DUPLICATES ──\n  const absorbSql = absorbedIds.map(id => `\nUPDATE _learnersRaw SET\n  stage = 'S4_ABSORBED',\n  status = 'absorbed',\n  merged_into = ${escSql(primary.record_id)},\n  updated_at = NOW()\nWHERE record_id = ${escSql(id)};\n  `.trim()).join('\\n');\n\n  results.push({\n    json: {\n      normalized_url: d.normalized_url,\n      primary_record_id: primary.record_id,\n      primary_name: mergedName,\n      primary_email: mergedEmail,\n      primary_phone: mergedPhone,\n      primary_company: mergedCompany,\n      primary_title: mergedTitle,\n      absorbed_ids: absorbedIds.join(','),\n      merged_fields: mergedFields.join(', ') || 'none',\n      group_size: groupRecords.length,\n      update_sql: updateSql,\n      absorb_sql: absorbSql,\n      full_sql: updateSql + '\\n' + absorbSql,\n      merged_at: new Date().toISOString()\n    }\n  });\n}\n\n// Safety check\nif (results.length === 0) {\n  return [{\n    json: {\n      error: true,\n      message: 'No valid S4 groups found to merge',\n      skipped: true\n    }\n  }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        -80
+      ],
+      "id": "5a639815-7904-41d4-806c-a7dca1fecf31",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.full_sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        816,
+        -80
+      ],
+      "id": "de6d2cf0-24e7-457e-8c34-07746596665f",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO merge_audit_log\n(normalized_url, primary_record_id,\n absorbed_record_ids, merged_fields,\n action, result, sql_generated)\nVALUES (\n  '{{ $json.normalized_url }}',\n  '{{ $json.primary_record_id }}',\n  '{{ $json.absorbed_ids }}',\n  '{{ $json.merged_fields }}',\n  'duplicate_merge',\n  'completed',\n  '{{ $json.update_sql.replace(/'/g, \"''\") }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1024,
+        -80
+      ],
+      "id": "387af09d-d962-4b6b-b734-8c219e7c1de0",
+      "name": "merge adit log",
+      "credentials": {
+        "postgres": {
+          "id": "Pz5LiQSqb8EQE2AD",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": " Execute a SQL Query1 (Fetch S4 Groups)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " Execute a SQL Query1 (Fetch S4 Groups)": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "merge adit log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7f5e3477-bdc3-4783-b613-d3e0b3ab2c4c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "e0lIvgybEI8jJTnk",
+  "tags": []
+}
