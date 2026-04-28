@@ -1,0 +1,590 @@
+{
+  "name": "assess 10 n8n_adv",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        128
+      ],
+      "id": "4ab0b360-1ef5-4df5-8023-ffff08ec415e",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY",
+          "mode": "list",
+          "cachedResultName": "Reaction ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Competitors Source",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        128
+      ],
+      "id": "626a7d0d-4e5b-40ee-96e3-02747148f12b",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        128
+      ],
+      "id": "c22fc845-7ca8-49ff-9ff7-19ea39ffeb1a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "Get last run",
+        "userActorId": {
+          "__rl": true,
+          "value": "LpVuK3Zozwuipa5bp",
+          "mode": "list",
+          "cachedResultName": "LinkedIn Profile Scraper + Email ✅ No Cookies (harvestapi/linkedin-profile-scraper)",
+          "cachedResultUrl": "https://console.apify.com/actors/LpVuK3Zozwuipa5bp/input"
+        }
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "7977e250-18fc-48c2-935a-a0524ff26623",
+      "name": "Get last run",
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Datasets",
+        "datasetId": "={{ $json.defaultDatasetId }}",
+        "offset": {},
+        "options": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ],
+      "id": "e82a1bba-03e0-4a25-99e1-7e584071f4ad",
+      "name": "Get dataset items",
+      "credentials": {
+        "apifyApi": {
+          "id": "qB67GNW8iVG12JSd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze these competitor LinkedIn posts for:\n{{ $json.competitor_name || $('Loop Over Items').first().json.competitor_name }}\n\nPosts data:\n{{ JSON.stringify($input.all().slice(0,5).map(i => ({\n  text: i.json.text || i.json.content || '',\n  likes: i.json.likesCount || 0,\n  comments: i.json.commentsCount || 0,\n  type: i.json.type || 'post'\n}))) }}\n\nReturn a JSON array of insights:\n[\n  {\n    \"post_topic\": \"Topic of the post\",\n    \"engagement_level\": \"High|Medium|Low\",\n    \"content_type\": \"Educational|Promotional|Story|News\",\n    \"key_insight\": \"What makes this post effective\",\n    \"likes\": 0,\n    \"comments\": 0\n  }\n]",
+        "options": {
+          "systemMessage": "You are a competitive intelligence analyst.\nAnalyze LinkedIn posts from competitors and \nextract structured insights.\nAlways respond with ONLY raw JSON array.\nNo markdown, no backticks.\nStart with [ and end with ]"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "5fc9d9bd-881d-4f6a-8527-2a1966780ee7",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1136,
+        224
+      ],
+      "id": "c12e2b05-e579-4ec6-8853-49da5fed8168",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "X6yz5KIllfL8AWsR",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=analysis_{{ $('Loop Over Items').first().json.record_id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        224
+      ],
+      "id": "83f291b0-edf0-4722-8c26-1b8a736cc6ce",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst original = $('Loop Over Items').first().json;\n\nlet rawOutput = item.json.output || '';\nlet insights = [];\n\ntry {\n  // Clean markdown\n  if (typeof rawOutput === 'string') {\n    rawOutput = rawOutput\n      .replace(/```json/gi, '')\n      .replace(/```/g, '')\n      .trim();\n\n    // Find JSON array\n    const start = rawOutput.indexOf('[');\n    const end = rawOutput.lastIndexOf(']');\n\n    if (start !== -1 && end !== -1) {\n      insights = JSON.parse(\n        rawOutput.substring(start, end + 1)\n      );\n    }\n  } else if (Array.isArray(rawOutput)) {\n    insights = rawOutput;\n  }\n} catch(e) {\n  // Safe fallback\n  insights = [{\n    post_topic: 'Parse Error',\n    engagement_level: 'Unknown',\n    content_type: 'Unknown',\n    key_insight: 'Failed to parse: ' + e.message,\n    likes: 0,\n    comments: 0\n  }];\n}\n\n// Validate + normalize each insight\nconst validEngagement = ['High', 'Medium', 'Low'];\nconst validTypes = [\n  'Educational', 'Promotional', \n  'Story', 'News'\n];\n\nconst analysisRows = insights.map((insight, i) => {\n\n  let engagement = (insight.engagement_level || 'Low')\n    .trim();\n  if (!validEngagement.includes(engagement)) {\n    engagement = 'Medium';\n  }\n\n  let contentType = (insight.content_type || 'News')\n    .trim();\n  if (!validTypes.includes(contentType)) {\n    contentType = 'News';\n  }\n\n  return {\n    record_id: original.record_id,\n    competitor_name: original.competitor_name,\n    post_topic: (insight.post_topic || '')\n      .substring(0, 200),\n    engagement_level: engagement,\n    content_type: contentType,\n    key_insight: (insight.key_insight || '')\n      .substring(0, 300),\n    likes: parseInt(insight.likes) || 0,\n    comments: parseInt(insight.comments) || 0,\n    timestamp: new Date().toISOString()\n  };\n});\n\n// Pass both analysis rows AND original context\nreturn [{\n  json: {\n    record_id: original.record_id,\n    competitor_name: original.competitor_name,\n    linkedin_url: original.linkedin_url,\n    analysis_rows: analysisRows,\n    analysis_count: analysisRows.length,\n    analysis_summary: analysisRows\n      .map(r => `${r.post_topic}: ${r.engagement_level}`)\n      .join(' | '),\n    parse_success: insights.length > 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        0
+      ],
+      "id": "a2ec44b3-906f-4239-9ff4-bd6818f81168",
+      "name": "Parse analysis"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9b8076f3-33b0-4379-b645-02f1da893916",
+              "leftValue": "={{ $json.parse_success }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1696,
+        0
+      ],
+      "id": "7c1b06ef-a79f-4bc1-90cc-80c4a7f84bd2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Based on this competitor analysis, generate \n3 prioritized marketing tasks:\n\nCompetitor: {{ $json.competitor_name }}\nAnalysis Summary: {{ $json.analysis_summary }}\nTotal Posts Analyzed: {{ $json.analysis_count }}\n\nReturn ONLY this JSON array:\n[\n  {\n    \"task_title\": \"Specific actionable task\",\n    \"rationale\": \"Why based on competitor insight\",\n    \"category\": \"Content|SEO|Social|Paid|Email|Brand\",\n    \"priority\": \"High|Medium|Low\",\n    \"ice_score\": 75,\n    \"owner_role\": \"Content Manager|CMO|Designer|Social Media\",\n    \"due_days\": 14,\n    \"source_insight\": \"Which insight drove this task\"\n  }\n]",
+        "options": {
+          "systemMessage": "You are a marketing strategy specialist.\nGenerate prioritized action tasks based on \ncompetitor analysis insights.\nUse ICE scoring: Impact x Confidence / Effort\nScore range: 1-100\nAlways respond with ONLY raw JSON array.\nNo markdown. Start with [ end with ]"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1920,
+        0
+      ],
+      "id": "2c4eea6b-13b8-432b-9d2c-feee694fe592",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1936,
+        224
+      ],
+      "id": "290e8f91-9196-46f5-916a-331eadac8a5f",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "X6yz5KIllfL8AWsR",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=tasks_{{ $json.record_id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2064,
+        224
+      ],
+      "id": "9488304e-f5d1-4e0c-a03d-f2ba588fbb99",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const original = item.json;\n  let rawOutput = item.json.output || '';\n  let tasks = [];\n\n  try {\n    if (typeof rawOutput === 'string') {\n      rawOutput = rawOutput\n        .replace(/```json/gi, '')\n        .replace(/```/g, '')\n        .trim();\n\n      const start = rawOutput.indexOf('[');\n      const end = rawOutput.lastIndexOf(']');\n\n      if (start !== -1 && end !== -1) {\n        tasks = JSON.parse(\n          rawOutput.substring(start, end + 1)\n        );\n      }\n    } else if (Array.isArray(rawOutput)) {\n      tasks = rawOutput;\n    }\n  } catch(e) {\n    tasks = [];\n  }\n\n  const validCategories = [\n    'Content','SEO','Social','Paid','Email','Brand'\n  ];\n  const validPriorities = ['High','Medium','Low'];\n\n  return tasks.map(task => {\n\n    let category = (task.category || 'Content').trim();\n    if (!validCategories.includes(category)) {\n      category = 'Content';\n    }\n\n    let priority = (task.priority || 'Medium').trim();\n    if (!validPriorities.includes(priority)) {\n      priority = 'Medium';\n    }\n\n    let iceScore = parseInt(task.ice_score) || 50;\n    iceScore = Math.min(100, Math.max(1, iceScore));\n\n    let dueDays = parseInt(task.due_days) || 14;\n    dueDays = Math.min(90, Math.max(7, dueDays));\n\n    return {\n      json: {\n        record_id: original.record_id,\n        task_title: (task.task_title || '').substring(0, 200),\n        rationale: (task.rationale || '').substring(0, 300),\n        category: category,\n        priority: priority,\n        ice_score: iceScore,\n        owner_role: task.owner_role || 'Marketing Manager',\n        due_days: dueDays,\n        source_insight: (task.source_insight || '').substring(0, 200),\n        competitor: original.competitor_name,\n        timestamp: new Date().toISOString()\n      }\n    };\n  });\n\n}).flat();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        -208
+      ],
+      "id": "6ab351d1-2fde-44d8-9e81-d6e209fd43a7",
+      "name": "Parse + Append Tasks"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY",
+          "mode": "list",
+          "cachedResultName": "Reaction ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1560438380,
+          "mode": "list",
+          "cachedResultName": "Recommended Tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5YEYAQiwzrq9ouhs3f4Ywwj179FgyaQFd4qldy0xYY/edit#gid=1560438380"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_title": "={{ $json.task_title }}",
+            "rationale": "={{ $json.rationale }}",
+            "category": "={{ $json.category }}",
+            "priority": "={{ $json.priority }}",
+            "ice_score": "={{ $json.ice_score }}",
+            "owner_role": "={{ $json.owner_role }}",
+            "due_days": "={{ $json.due_days }}",
+            "record_id": "={{ $('Parse analysis').item.json.record_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "record_id",
+              "displayName": "record_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "task_title",
+              "displayName": "task_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rationale",
+              "displayName": "rationale",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ice_score",
+              "displayName": "ice_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "owner_role",
+              "displayName": "owner_role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_days",
+              "displayName": "due_days",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2496,
+        -208
+      ],
+      "id": "19e3cb77-7a60-4e02-bfcf-5cb54ea662fb",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p29c8vZBT44DvNDB",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get last run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get last run": {
+      "main": [
+        [
+          {
+            "node": "Get dataset items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get dataset items": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse analysis": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse + Append Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Append Tasks": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "96c6528b-baac-4b82-8d8d-30bc7120b90b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfa9bd419da97e8a72d6069acb67e95575c89baa71302d0781a7331301986176"
+  },
+  "id": "YMfF32mXFzfDky9U",
+  "tags": []
+}
